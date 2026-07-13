@@ -79,8 +79,10 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public void transfer(TransferRequest request) {
-        Account sourceAcc = getAccount(request.getSourceAccountNumber());
-        Account destAcc = getAccount(request.getDestinationAccountNumber());
+        Account sourceAcc = accountRepository.findByAccountNumber(request.getSourceAccountNumber())
+                .orElseThrow(() -> new RuntimeException("Rekening asal tidak ditemukan"));
+        Account destAcc = accountRepository.findByAccountNumber(request.getDestinationAccountNumber())
+                .orElseThrow(() -> new RuntimeException("Rekening tujuan tidak ditemukan"));
 
         if (sourceAcc.getBalance().compareTo(request.getAmount()) < 0) {
             throw new RuntimeException("Saldo rekening asal tidak mencukupi");
