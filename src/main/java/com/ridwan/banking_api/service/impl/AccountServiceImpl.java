@@ -1,6 +1,7 @@
 package com.ridwan.banking_api.service.impl;
 
 import com.ridwan.banking_api.dto.AccountRequest;
+import com.ridwan.banking_api.dto.TransactionResponse;
 import com.ridwan.banking_api.dto.TransferRequest;
 import com.ridwan.banking_api.entity.Account;
 import com.ridwan.banking_api.entity.Transaction;
@@ -11,7 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -79,9 +82,9 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public void transfer(TransferRequest request) {
-        Account sourceAcc = accountRepository.findByAccountNumber(request.getSourceAccountNumber())
+        Account sourceAcc = accountRepository.findByAccountNumberWithLock(request.getSourceAccountNumber())
                 .orElseThrow(() -> new RuntimeException("Rekening asal tidak ditemukan"));
-        Account destAcc = accountRepository.findByAccountNumber(request.getDestinationAccountNumber())
+        Account destAcc = accountRepository.findByAccountNumberWithLock(request.getDestinationAccountNumber())
                 .orElseThrow(() -> new RuntimeException("Rekening tujuan tidak ditemukan"));
 
         if (sourceAcc.getBalance().compareTo(request.getAmount()) < 0) {
@@ -101,5 +104,27 @@ public class AccountServiceImpl implements AccountService {
                 .build();
 
         transactionRepository.save(transaction);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TransactionResponse> getTransactionHistory(String accountNumber) {
+        // 1. Cari dulu akun yang dimaksud untuk mendapatkan ID-nya
+        Account account = getAccount(accountNumber);
+
+        // 2. Ambil semua transaksi dimana akun ini jadi pengirim ATAU penerima
+        List<Transaction> transactions = transactionRepository
+                .findBySourceAccountIdOrDestinationAccountId(account.getId(), account.getId());
+
+        // 3. Petakan (Map) dari Entity ke DTO
+        return transactions.stream().map(tx -> TransactionResponse.builder()
+                .id(tx.getId())
+                .sourceAccountNumber(tx.getSourceAccount().getAccountNumber())
+                .sourceAccountHolder(tx.getSourceAccount().getAccountHolderName())
+                .destinationAccountNumber(tx.getDestinationAccount().getAccountNumber())
+                .destinationAccountHolder(tx.getDestinationAccount().getAccountHolderName())
+                .amount(tx.getAmount())
+                .transferDate(tx.getTransferDate())
+                .build()).collect(Collectors.toList());
     }
 }

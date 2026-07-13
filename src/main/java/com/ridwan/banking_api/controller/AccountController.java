@@ -1,6 +1,7 @@
 package com.ridwan.banking_api.controller;
 
 import com.ridwan.banking_api.dto.AccountRequest;
+import com.ridwan.banking_api.dto.TransactionResponse;
 import com.ridwan.banking_api.dto.TransferRequest;
 import com.ridwan.banking_api.entity.Account;
 import com.ridwan.banking_api.service.AccountService;
@@ -11,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -60,5 +62,11 @@ public class AccountController {
     public ResponseEntity<String> transfer(@Valid @RequestBody TransferRequest request) {
         accountService.transfer(request);
         return ResponseEntity.ok("Transfer berhasil dilakukan");
+    }
+
+    @GetMapping("/{accountNumber}/mutations")
+    public ResponseEntity<List<TransactionResponse>> getHistory(@PathVariable String accountNumber) {
+        List<TransactionResponse> history = accountService.getTransactionHistory(accountNumber);
+        return ResponseEntity.ok(history);
     }
 }
