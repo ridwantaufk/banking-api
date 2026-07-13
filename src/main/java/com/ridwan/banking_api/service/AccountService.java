@@ -2,6 +2,8 @@ package com.ridwan.banking_api.service;
 
 import com.ridwan.banking_api.entity.Account;
 import com.ridwan.banking_api.dto.AccountRequest;
+import com.ridwan.banking_api.dto.TransferRequest;
+
 import java.math.BigDecimal;
 
 public interface AccountService {
@@ -12,4 +14,6 @@ public interface AccountService {
     Account deposit(String accountNumber, BigDecimal amount);
 
     Account withdraw(String accountNumber, BigDecimal amount);
+
+    void transfer(TransferRequest request);
 }

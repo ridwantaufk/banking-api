@@ -1,6 +1,7 @@
 package com.ridwan.banking_api.controller;
 
 import com.ridwan.banking_api.dto.AccountRequest;
+import com.ridwan.banking_api.dto.TransferRequest;
 import com.ridwan.banking_api.entity.Account;
 import com.ridwan.banking_api.service.AccountService;
 import jakarta.validation.Valid;
@@ -53,5 +54,11 @@ public class AccountController {
         BigDecimal amount = request.get("amount");
         Account updatedAccount = accountService.withdraw(accountNumber, amount);
         return ResponseEntity.ok(updatedAccount);
+    }
+
+    @PostMapping("/transfer")
+    public ResponseEntity<String> transfer(@Valid @RequestBody TransferRequest request) {
+        accountService.transfer(request);
+        return ResponseEntity.ok("Transfer berhasil dilakukan");
     }
 }

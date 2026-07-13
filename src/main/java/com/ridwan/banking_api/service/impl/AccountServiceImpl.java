@@ -1,7 +1,10 @@
 package com.ridwan.banking_api.service.impl;
 
 import com.ridwan.banking_api.dto.AccountRequest;
+import com.ridwan.banking_api.dto.TransferRequest;
 import com.ridwan.banking_api.entity.Account;
+import com.ridwan.banking_api.entity.Transaction;
+import com.ridwan.banking_api.repository.TransactionRepository;
 import com.ridwan.banking_api.repository.AccountRepository;
 import com.ridwan.banking_api.service.AccountService;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +20,7 @@ public class AccountServiceImpl implements AccountService {
     // Spring akan otomatis menyuntikkan (Dependency Injection) repository ini lewat
     // Lombok @RequiredArgsConstructor
     private final AccountRepository accountRepository;
+    private final TransactionRepository transactionRepository;
 
     @Override
     @Transactional
@@ -70,5 +74,30 @@ public class AccountServiceImpl implements AccountService {
 
         account.setBalance(account.getBalance().subtract(amount));
         return accountRepository.save(account);
+    }
+
+    @Override
+    @Transactional
+    public void transfer(TransferRequest request) {
+        Account sourceAcc = getAccount(request.getSourceAccountNumber());
+        Account destAcc = getAccount(request.getDestinationAccountNumber());
+
+        if (sourceAcc.getBalance().compareTo(request.getAmount()) < 0) {
+            throw new RuntimeException("Saldo rekening asal tidak mencukupi");
+        }
+
+        sourceAcc.setBalance(sourceAcc.getBalance().subtract(request.getAmount()));
+        destAcc.setBalance(destAcc.getBalance().add(request.getAmount()));
+
+        accountRepository.save(sourceAcc);
+        accountRepository.save(destAcc);
+
+        Transaction transaction = Transaction.builder()
+                .sourceAccount(sourceAcc)
+                .destinationAccount(destAcc)
+                .amount(request.getAmount())
+                .build();
+
+        transactionRepository.save(transaction);
     }
 }
