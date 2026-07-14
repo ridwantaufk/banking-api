@@ -1,29 +1,21 @@
 package com.ridwan.banking_api.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "transactions")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class Transaction {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Relasi ke akun asal (source)
     @ManyToOne
     @JoinColumn(name = "source_account_id", nullable = false)
     private Account sourceAccount;
 
-    // Relasi ke akun tujuan (destination)
     @ManyToOne
     @JoinColumn(name = "destination_account_id", nullable = false)
     private Account destinationAccount;
@@ -34,8 +26,53 @@ public class Transaction {
     @Column(name = "transfer_date", nullable = false)
     private LocalDateTime transferDate;
 
+    public Transaction() {
+    }
+
     @PrePersist
     protected void onCreate() {
         this.transferDate = LocalDateTime.now();
+    }
+
+    // GETTERS
+    public Long getId() {
+        return id;
+    }
+
+    public Account getSourceAccount() {
+        return sourceAccount;
+    }
+
+    public Account getDestinationAccount() {
+        return destinationAccount;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public LocalDateTime getTransferDate() {
+        return transferDate;
+    }
+
+    // SETTERS
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public void setSourceAccount(Account sourceAccount) {
+        this.sourceAccount = sourceAccount;
+    }
+
+    public void setDestinationAccount(Account destinationAccount) {
+        this.destinationAccount = destinationAccount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
+
+    public void setTransferDate(LocalDateTime transferDate) {
+        this.transferDate = transferDate;
     }
 }

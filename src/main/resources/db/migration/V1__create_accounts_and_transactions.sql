@@ -1,3 +1,5 @@
+-- V1__create_accounts_and_transactions.sql
+
 CREATE TABLE IF NOT EXISTS accounts (
     id BIGSERIAL PRIMARY KEY,
     account_number VARCHAR(20) UNIQUE NOT NULL,

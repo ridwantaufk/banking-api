@@ -4,14 +4,13 @@ import com.ridwan.banking_api.dto.AccountRequest;
 import com.ridwan.banking_api.dto.TransactionResponse;
 import com.ridwan.banking_api.dto.TransferRequest;
 import com.ridwan.banking_api.entity.Account;
-import com.ridwan.banking_api.entity.Customer;
 import com.ridwan.banking_api.entity.Transaction;
+import com.ridwan.banking_api.entity.User;
 import com.ridwan.banking_api.repository.TransactionRepository;
 import com.ridwan.banking_api.repository.AccountRepository;
 import com.ridwan.banking_api.service.AccountService;
 import lombok.RequiredArgsConstructor;
-
-import org.springframework.boot.autoconfigure.couchbase.CouchbaseProperties.Authentication;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,42 +23,56 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AccountServiceImpl implements AccountService {
 
-    // Spring akan otomatis menyuntikkan (Dependency Injection) repository ini lewat
-    // Lombok @RequiredArgsConstructor
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
 
     @Override
     @Transactional
     public Account createAccount(AccountRequest request) {
-        // Ambil user yang sedang login
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
-        Customer customer = user.getCustomer(); // pastikan tidak null
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        User user = (User) authentication.getPrincipal();
 
         String generatedAccountNumber = UUID.randomUUID().toString().replaceAll("[^0-9]", "").substring(0, 10);
-        Account account = Account.builder()
-                .accountNumber(generatedAccountNumber)
-                .accountHolderName(request.getAccountHolderName()) // bisa diambil dari customer
-                .balance(request.getBalance())
-                .customer(customer)
-                .build();
+
+        Account account = new Account();
+        account.setAccountNumber(generatedAccountNumber);
+        account.setAccountHolderName(request.getAccountHolderName());
+        account.setBalance(request.getBalance());
+        account.setCustomer(user.getCustomer());
+
         return accountRepository.save(account);
     }
-
+    
     @Override
     @Transactional(readOnly = true)
     public Account getAccount(String accountNumber) {
         Account account = accountRepository.findByAccountNumber(accountNumber)
                 .orElseThrow(() -> new RuntimeException("Rekening tidak ditemukan"));
-        // Cek otorisasi
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        User user = (User) auth.getPrincipal();
-        boolean isAdmin = auth.getAuthorities().stream().anyMatch(g -> g.getAuthority().equals("ROLE_ADMIN"));
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        User user = (User) authentication.getPrincipal();
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(g -> g.getAuthority().equals("ROLE_ADMIN"));
+
         if (!isAdmin && !account.getCustomer().getId().equals(user.getCustomer().getId())) {
             throw new RuntimeException("Anda tidak memiliki akses ke rekening ini");
         }
+
         return account;
+    }
+
+    @Override
+    @Transactional
+    public Account deposit(String accountNumber, BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Jumlah setoran harus lebih besar dari nol");
+        }
+
+        Account account = getAccount(accountNumber);
+        account.setBalance(account.getBalance().add(amount));
+
+        return accountRepository.save(account);
     }
 
     @Override
@@ -71,8 +84,6 @@ public class AccountServiceImpl implements AccountService {
 
         Account account = getAccount(accountNumber);
 
-        // Cek apakah saldo cukup menggunakan compareTo (karena BigDecimal tidak bisa
-        // pakai tanda < atau >)
         if (account.getBalance().compareTo(amount) < 0) {
             throw new RuntimeException("Saldo tidak mencukupi");
         }
@@ -84,8 +95,19 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional
     public void transfer(TransferRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        User user = (User) authentication.getPrincipal();
+
         Account sourceAcc = accountRepository.findByAccountNumberWithLock(request.getSourceAccountNumber())
                 .orElseThrow(() -> new RuntimeException("Rekening asal tidak ditemukan"));
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(g -> g.getAuthority().equals("ROLE_ADMIN"));
+
+        if (!isAdmin && !sourceAcc.getCustomer().getId().equals(user.getCustomer().getId())) {
+            throw new RuntimeException("Anda tidak memiliki akses ke rekening ini");
+        }
+
         Account destAcc = accountRepository.findByAccountNumberWithLock(request.getDestinationAccountNumber())
                 .orElseThrow(() -> new RuntimeException("Rekening tujuan tidak ditemukan"));
 
@@ -99,11 +121,10 @@ public class AccountServiceImpl implements AccountService {
         accountRepository.save(sourceAcc);
         accountRepository.save(destAcc);
 
-        Transaction transaction = Transaction.builder()
-                .sourceAccount(sourceAcc)
-                .destinationAccount(destAcc)
-                .amount(request.getAmount())
-                .build();
+        Transaction transaction = new Transaction();
+        transaction.setSourceAccount(sourceAcc);
+        transaction.setDestinationAccount(destAcc);
+        transaction.setAmount(request.getAmount());
 
         transactionRepository.save(transaction);
     }
@@ -111,14 +132,11 @@ public class AccountServiceImpl implements AccountService {
     @Override
     @Transactional(readOnly = true)
     public List<TransactionResponse> getTransactionHistory(String accountNumber) {
-        // 1. Cari dulu akun yang dimaksud untuk mendapatkan ID-nya
         Account account = getAccount(accountNumber);
 
-        // 2. Ambil semua transaksi dimana akun ini jadi pengirim ATAU penerima
         List<Transaction> transactions = transactionRepository
                 .findBySourceAccountIdOrDestinationAccountId(account.getId(), account.getId());
 
-        // 3. Petakan (Map) dari Entity ke DTO
         return transactions.stream().map(tx -> TransactionResponse.builder()
                 .id(tx.getId())
                 .sourceAccountNumber(tx.getSourceAccount().getAccountNumber())
